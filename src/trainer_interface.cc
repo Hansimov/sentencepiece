@@ -209,12 +209,39 @@ TrainerInterface::TrainerInterface(const TrainerSpec &trainer_spec,
 
 TrainerInterface::~TrainerInterface() {}
 
+namespace
+{
+  // Calc size of sentencepiece in monospace width.
+  size_t monospace_size(const string_util::UnicodeText &sentencepiece)
+  {
+    size_t size = 0;
+    for (const char32 c : sentencepiece)
+    {
+      auto script = unicode_script::GetScript(c);
+      // Treat CJK characters (Han, Hiragana, Katakana, Hangul) as size 2
+      if (script == unicode_script::U_Han ||
+          script == unicode_script::U_Hiragana ||
+          script == unicode_script::U_Katakana ||
+          script == unicode_script::U_Hangul ||
+          c == 0x30FC)
+      {
+        size += 2;
+      }
+      else
+      {
+        size += 1;
+      }
+    }
+    return size;
+  }
+}
+
 bool TrainerInterface::IsValidSentencePiece(
     const string_util::UnicodeText &sentencepiece) const {
   // Returns false if the length of piece is invalid.
   if (sentencepiece.empty() ||
-      sentencepiece.size() >
-          static_cast<size_t>(trainer_spec_.max_sentencepiece_length())) {
+    monospace_size(sentencepiece) >
+      static_cast<size_t>(trainer_spec_.max_sentencepiece_length())) {
     return false;
   }
 

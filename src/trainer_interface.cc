@@ -245,11 +245,45 @@ bool is_digit(char32 c) {
   return c >= '0' && c <= '9';
 }
 
+bool is_alpha(char32 c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+bool is_mask(char32 c) {
+  // 0x2582 is '▂', used as mask for whitespace during training.
+  return c == 0x2582;
+}
+
+bool is_dash(char32 c) {
+  return c == '-';
+}
+
 bool is_pure_digits(const string_util::UnicodeText &piece) {
   for (char32 c : piece) {
     if (!is_digit(c)) return false;
   }
   return true;
+}
+
+bool TrainerInterface:: is_beg_or_end_with_one_char(const string_util::UnicodeText &piece) const
+{
+  if (piece.size() < 3) {
+    return false;
+  }
+
+  for (char32 c : piece) {
+    if (!is_alpha(c) && !is_digit(c) && !is_mask(c) && !is_dash(c))
+    {
+      return false;
+    }
+  }
+
+  if ((is_alpha(piece[0]) && is_mask(piece[1])) || 
+      (is_mask(piece[piece.size() - 2]) && is_alpha(piece[piece.size() - 1]))) {
+    return true;
+  }
+
+  return false;
 }
 
 bool is_malformed(const string_util::UnicodeText &piece) {
@@ -278,9 +312,9 @@ bool is_malformed(const string_util::UnicodeText &piece) {
   // check for stripped (start/end with) chars
   // 0x2582 is '▂', used as mask for whitespace during train
   if (piece_str.size() >= 2 &&
-      ( piece_str.front() == '.' || piece_str.back() == '.' ||
-        piece_str.front() == '-' || piece_str.back() == '-' ||
-        piece[0] == 0x2582 || piece[piece.size() - 1] == 0x2582))
+      (piece_str.front() == '.' || piece_str.back() == '.' ||
+       piece_str.front() == '-' || piece_str.back() == '-' ||
+       is_mask(piece[0]) || is_mask(piece[piece.size() - 1])))
   {
     return true;
   }
@@ -298,6 +332,7 @@ bool TrainerInterface::IsValidSentencePiece(
     const string_util::UnicodeText &sentencepiece) const {
   if (sentencepiece.empty()) return false;
   if (is_exceed_max_length(sentencepiece)) return false;
+  if (is_beg_or_end_with_one_char(sentencepiece)) return false;
   if (is_pure_digits(sentencepiece)) return false;
   if (is_malformed(sentencepiece)) return false;
 

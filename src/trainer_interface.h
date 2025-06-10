@@ -116,7 +116,7 @@ class TrainerInterface {
   // The result is affected by
   // max_sentencepiece_length, split_by_whiespace, split_by_unicode_script.
   bool is_exceed_max_length(const string_util::UnicodeText &piece) const;
-  
+  bool is_beg_or_end_with_one_char(const string_util::UnicodeText &piece) const;
   bool IsValidSentencePiece(const string_util::UnicodeText &piece) const;
 
   // Splits all sentencecs by whitespaces and

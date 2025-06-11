@@ -141,6 +141,7 @@ set(SPM_TRAIN_SRCS
   bpe_model_trainer.h
   sentencepiece_trainer.h
   pretokenizer_for_training.h
+  str_utils.h
   builder.cc
   unicode_script.cc
   trainer_factory.cc
@@ -150,7 +151,8 @@ set(SPM_TRAIN_SRCS
   char_model_trainer.cc
   bpe_model_trainer.cc
   sentencepiece_trainer.cc
-  pretokenizer_for_training.cc)
+  pretokenizer_for_training.cc
+  str_utils.cc)
 
 set(SPM_TEST_SRCS
   ${SPM_PROTO_HDRS}

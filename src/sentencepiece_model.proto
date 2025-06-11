@@ -236,6 +236,12 @@ message TrainerSpec {
   // seed sentencepiece <tab> frequency per line.
   optional string seed_sentencepieces_file = 54 [default = ""];
 
+  // false: treat consecutive alpha-numeric characters as complete words
+  // rather than splitting them into individual characters during seed piece extraction
+  // This is useful when training on CJK corpus
+  // and you want to preserve complete English/Latin words and numbers
+  optional bool split_alphanum = 60 [default = false];
+  
   // Customized extensions: the range of field numbers
   // are open to third-party extensions.
   extensions 200 to max;

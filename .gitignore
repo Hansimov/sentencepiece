@@ -5,7 +5,9 @@ Makefile.in
 /py-compile
 /test-driver
 /ylwrap
+/bin
 /build
+.vscode
 
 /autom4te.cache
 /autoscan.log

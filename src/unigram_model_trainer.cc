@@ -28,6 +28,7 @@
 #include "normalizer.h"
 #include "pretokenizer_for_training.h"
 #include "sentencepiece_trainer.h"
+#include "str_utils.h"
 #include "third_party/absl/container/flat_hash_map.h"
 #include "third_party/absl/strings/numbers.h"
 #include "third_party/absl/strings/str_replace.h"
@@ -142,6 +143,48 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() {
              : MakeSeedSentencePiecesInternal<int32>();
 }
 
+// Validate boundaries of pos for alphanum substrings
+// used to avoid alphanum truncation.
+template <typename node_int_type>
+bool is_alphanum_boundary_valid(
+  const std::vector<char32> &array, node_int_type pos, node_int_type len
+) {
+  if (len <= 0) return true;
+  char32 first_char = array[pos];
+  char32 last_char = array[pos + len - 1];
+  // Check front boundary
+  if (pos > 0) {
+    char32 prev_char = array[pos - 1];
+    if (prev_char == kSentenceBoundary) {
+    } else {
+      // If substring starts with alpha, previous char cannot be alpha
+      if (str_utils::is_alpha(first_char) && str_utils::is_alpha(prev_char)) {
+        return false;
+      }
+      // If substring starts with digit, previous char cannot be digit
+      if (str_utils::is_digit(first_char) && str_utils::is_digit(prev_char)) {
+        return false;
+      }
+    }
+  }
+  // Check back boundary
+  if (pos + len < array.size()) {
+    char32 next_char = array[pos + len];
+    if (next_char == kSentenceBoundary) {
+    } else {
+      // If substring ends with alpha, next char cannot be alpha
+      if (str_utils::is_alpha(last_char) && str_utils::is_alpha(next_char)) {
+        return false;
+      }
+      // If substring ends with digit, next char cannot be digit
+      if (str_utils::is_digit(last_char) && str_utils::is_digit(next_char)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Returns seed sentencepieces for EM training.
 template <typename node_int_type>
 TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
@@ -152,7 +195,7 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
   // Pretokenizer is used as a constraint of piece extractions.
   const auto *pretokenizer = SentencePieceTrainer::GetPretokenizerForTraining();
 
-  auto pretokenize_or_rewrite = [&](std::pair<std::string, int64> *w) {
+  auto pretokenize_or_rewrite = [&](std::pair<std::string, int64> *w) -> std::vector<char32> {
     if (pretokenizer) {
       std::vector<char32> chars;
       for (const auto &w : pretokenizer->PreTokenize(w->first)) {
@@ -282,6 +325,19 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
       if (std::find(begin, end, kSentenceBoundary) != end) {
         continue;
       }
+
+      // Skips if an alphanum substring is truncated
+      bool is_all_pos_valid = true;
+      for (node_int_type j = L[i]; j < R[i] && is_all_pos_valid; ++j) {
+        node_int_type pos = SA[j];
+        if (!is_alphanum_boundary_valid(array, pos, len)) {
+          is_all_pos_valid = false;
+        }
+      }
+      if (!is_all_pos_valid) {
+        continue;
+      }
+
       const UnicodeText uw(begin, end);
       if (!IsValidSentencePiece(uw)) {
         continue;

@@ -313,6 +313,10 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
     BoundedPriorityQueue<node_int_type> queue(
         static_cast<size_t>(trainer_spec_.seed_sentencepiece_size()));
 
+    // Debug: Collect invalid alphanum boundary cases
+    int invalidCaseIdx = 0;
+    constexpr int kMaxInvalidCases = 100;
+
     for (node_int_type i = 0; i < node_num; ++i) {
       const node_int_type offset = SA[L[i]];
       const node_int_type len = D[i];
@@ -332,6 +336,21 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
         node_int_type pos = SA[j];
         if (!is_alphanum_boundary_valid(array, pos, len)) {
           is_all_pos_valid = false;
+          // print invalid case with substring of (array, pos, lne) for debugging
+          std::string bad_substring =
+              string_util::UnicodeTextToUTF8(UnicodeText(&array[pos], &array[pos + len]));
+          std::string bad_substring_char_prev = string_util::UnicodeTextToUTF8(
+              UnicodeText(&array[pos - 1], &array[pos]));
+          std::string bad_substring_char_next = string_util::UnicodeTextToUTF8(
+              UnicodeText(&array[pos + len], &array[pos + len + 1]));
+          if (invalidCaseIdx < kMaxInvalidCases) {
+            std::cout << "<" << invalidCaseIdx << "> "
+                      <<  bad_substring_char_prev
+                      << "[" << bad_substring << "]"
+                      << bad_substring_char_next
+                      << std::endl;
+            invalidCaseIdx++;
+          }
         }
       }
       if (!is_all_pos_valid) {

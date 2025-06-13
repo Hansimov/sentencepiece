@@ -143,46 +143,42 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePieces() {
              : MakeSeedSentencePiecesInternal<int32>();
 }
 
-// Validate boundaries of pos for alphanum substrings
-// used to avoid alphanum truncation.
+// if true , the substring begin/end is alphanum and truncated, should be skipped
+// if false, the substring begin/end is not truncated alphanum, should be kept
 template <typename node_int_type>
-bool is_alphanum_boundary_valid(
-  const std::vector<char32> &array, node_int_type pos, node_int_type len
-) {
-  if (len <= 0) return true;
-  char32 first_char = array[pos];
-  char32 last_char = array[pos + len - 1];
-  // Check front boundary
-  if (pos > 0) {
-    char32 prev_char = array[pos - 1];
-    if (prev_char == kSentenceBoundary) {
-    } else {
-      // If substring starts with alpha, previous char cannot be alpha
+bool is_alphanum_truncated(const std::vector<char32> &array,
+                          node_int_type offset, 
+                          node_int_type len) {
+  if (len <= 0 || offset < 0 || offset + len > array.size()) {
+    return true;
+  }
+  const char32 first_char = array[offset];
+  const char32 last_char = array[offset + len - 1];
+  // check begin
+  if (offset > 0) {
+    char32 prev_char = array[offset - 1];
+    if (prev_char != kSentenceBoundary) {
       if (str_utils::is_alpha(first_char) && str_utils::is_alpha(prev_char)) {
-        return false;
+        return true;
       }
-      // If substring starts with digit, previous char cannot be digit
       if (str_utils::is_digit(first_char) && str_utils::is_digit(prev_char)) {
-        return false;
+        return true;
       }
     }
   }
-  // Check back boundary
-  if (pos + len < array.size()) {
-    char32 next_char = array[pos + len];
-    if (next_char == kSentenceBoundary) {
-    } else {
-      // If substring ends with alpha, next char cannot be alpha
+  // check end
+  if (offset + len < array.size()) {
+    char32 next_char = array[offset + len];
+    if (next_char != kSentenceBoundary) {
       if (str_utils::is_alpha(last_char) && str_utils::is_alpha(next_char)) {
-        return false;
+        return true;
       }
-      // If substring ends with digit, next char cannot be digit
       if (str_utils::is_digit(last_char) && str_utils::is_digit(next_char)) {
-        return false;
+        return true;
       }
     }
   }
-  return true;
+  return false;
 }
 
 // Returns seed sentencepieces for EM training.
@@ -313,10 +309,6 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
     BoundedPriorityQueue<node_int_type> queue(
         static_cast<size_t>(trainer_spec_.seed_sentencepiece_size()));
 
-    // Debug: Collect invalid alphanum boundary cases
-    int invalidCaseIdx = 0;
-    constexpr int kMaxInvalidCases = 100;
-
     for (node_int_type i = 0; i < node_num; ++i) {
       const node_int_type offset = SA[L[i]];
       const node_int_type len = D[i];
@@ -329,39 +321,14 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
       if (std::find(begin, end, kSentenceBoundary) != end) {
         continue;
       }
-
-      // Skips if an alphanum substring is truncated
-      bool is_all_pos_valid = true;
-      for (node_int_type j = L[i]; j < R[i] && is_all_pos_valid; ++j) {
-        node_int_type pos = SA[j];
-        if (!is_alphanum_boundary_valid(array, pos, len)) {
-          is_all_pos_valid = false;
-          // print invalid case with substring of (array, pos, lne) for debugging
-          std::string bad_substring =
-              string_util::UnicodeTextToUTF8(UnicodeText(&array[pos], &array[pos + len]));
-          std::string bad_substring_char_prev = string_util::UnicodeTextToUTF8(
-              UnicodeText(&array[pos - 1], &array[pos]));
-          std::string bad_substring_char_next = string_util::UnicodeTextToUTF8(
-              UnicodeText(&array[pos + len], &array[pos + len + 1]));
-          if (invalidCaseIdx < kMaxInvalidCases) {
-            std::cout << "<" << invalidCaseIdx << "> "
-                      <<  bad_substring_char_prev
-                      << "[" << bad_substring << "]"
-                      << bad_substring_char_next
-                      << std::endl;
-            invalidCaseIdx++;
-          }
-        }
-      }
-      if (!is_all_pos_valid) {
-        continue;
-      }
-
       const UnicodeText uw(begin, end);
       if (!IsValidSentencePiece(uw)) {
         continue;
       }
-
+      // Skips if truncated at alphanum chars.
+      if (!trainer_spec_.split_alphanum() && is_alphanum_truncated(array, offset, len)) {
+        continue;
+      }
       // character-wise coverage is the default score.
       const node_int_type freq = R[i] - L[i];
       const node_int_type score = freq * len;

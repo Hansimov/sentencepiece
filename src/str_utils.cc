@@ -21,7 +21,7 @@ bool is_mask(char32 c) {
 }
 
 bool is_dash(char32 c) {
-  return c == '-';
+  return c == '-' || c == '=' || c == '_'; 
 }
 
 bool is_pure_digits(const string_util::UnicodeText &piece) {

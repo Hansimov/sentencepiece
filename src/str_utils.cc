@@ -15,6 +15,10 @@ bool is_alpha(char32 c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+bool is_alnum(char32 c) {
+  return is_alpha(c) || is_digit(c);
+}
+
 bool is_mask(char32 c) {
   // 0x2582 is '▂', used as mask for whitespace during training.
   return c == 0x2582;
@@ -22,6 +26,10 @@ bool is_mask(char32 c) {
 
 bool is_dash(char32 c) {
   return c == '-' || c == '=' || c == '_'; 
+}
+
+bool is_connector(char32 c) {
+  return c == '.' || is_dash(c);
 }
 
 bool is_pure_digits(const string_util::UnicodeText &piece) {
@@ -55,18 +63,48 @@ bool is_beg_or_end_with_one_char(const string_util::UnicodeText &piece) {
   }
 
   for (char32 c : piece) {
-    if (!is_alpha(c) && !is_digit(c) && !is_mask(c) && !is_dash(c)) {
+    if (!is_alnum(c) && !is_mask(c) && !is_dash(c)) {
       return false;
     }
   }
 
-  if ((is_alpha(piece[0]) && is_mask(piece[1])) || 
-      (is_mask(piece[piece.size() - 2]) && is_alpha(piece[piece.size() - 1]))) {
+  if ((is_alnum(piece[0]) && is_mask(piece[1])) || 
+      (is_mask(piece[piece.size() - 2]) && is_alnum(piece[piece.size() - 1]))) {
     return true;
   }
 
   return false;
 }
+
+
+namespace {
+bool is_ascii_piece(const string_util::UnicodeText &piece) {
+  for (const char32 c : piece) {
+    if (c > 0x7f) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool has_repeated_ascii_run(const std::string &piece_str, size_t min_run = 3) {
+  if (piece_str.size() < min_run) {
+    return false;
+  }
+  size_t run_len = 1;
+  for (size_t i = 1; i < piece_str.size(); ++i) {
+    if (piece_str[i] == piece_str[i - 1]) {
+      ++run_len;
+      if (run_len >= min_run) {
+        return true;
+      }
+    } else {
+      run_len = 1;
+    }
+  }
+  return false;
+}
+}  // namespace
 
 
 bool is_malformed(const string_util::UnicodeText &piece) {
@@ -79,15 +117,17 @@ bool is_malformed(const string_util::UnicodeText &piece) {
   }
 
   // check for multiple consecutive dots or dashes
-  size_t consecutive_dots = 0;
+  size_t consecutive_connectors = 0;
+  size_t connector_count = 0;
   for (char c : piece_str) {
-    if (c == '.' || c == '-') {
-      consecutive_dots++;
-      if (consecutive_dots >= 2) {
+    if (c == '.' || c == '-' || c == '_' || c == '=') {
+      ++connector_count;
+      ++consecutive_connectors;
+      if (consecutive_connectors >= 2) {
         return true;
       }
     } else {
-      consecutive_dots = 0;
+      consecutive_connectors = 0;
     }
   }
 
@@ -96,6 +136,8 @@ bool is_malformed(const string_util::UnicodeText &piece) {
   if (piece_str.size() >= 2 &&
       (piece_str.front() == '.' || piece_str.back() == '.' ||
        piece_str.front() == '-' || piece_str.back() == '-' ||
+       piece_str.front() == '_' || piece_str.back() == '_' ||
+       piece_str.front() == '=' || piece_str.back() == '=' ||
        is_mask(piece[0]) || is_mask(piece[piece.size() - 1]))) {
     return true;
   }
@@ -104,6 +146,15 @@ bool is_malformed(const string_util::UnicodeText &piece) {
   if (piece_str.size() >= 3 && piece_str.substr(0, 2) == "bv" &&
       is_digit(piece_str[2])) {
     return true;
+  }
+
+  if (is_ascii_piece(piece)) {
+    if (has_repeated_ascii_run(piece_str)) {
+      return true;
+    }
+    if (piece.size() >= 3 && connector_count * 2 >= piece.size()) {
+      return true;
+    }
   }
 
   return false;

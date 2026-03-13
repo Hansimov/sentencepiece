@@ -181,6 +181,57 @@ bool is_alphanum_truncated(const std::vector<char32> &array,
   return false;
 }
 
+template <typename node_int_type>
+bool should_skip_truncated_alphanum(
+    const std::vector<char32> &array,
+    const std::vector<node_int_type> &suffix_array,
+    node_int_type left,
+    node_int_type right,
+    node_int_type len) {
+  constexpr int kMaxBoundaryChecks = 64;
+  constexpr double kMaxTruncatedRatio = 0.2;
+
+  int checked = 0;
+  int truncated = 0;
+  int standalone = 0;
+
+  for (node_int_type j = left; j < right; ++j) {
+    const node_int_type offset = suffix_array[j];
+    if (offset < 0 || offset + len > array.size()) {
+      continue;
+    }
+
+    ++checked;
+    if (is_alphanum_truncated(array, offset, len)) {
+      ++truncated;
+    } else {
+      ++standalone;
+    }
+
+    if (checked >= 8 && standalone == 0) {
+      return true;
+    }
+    if (checked >= 16 &&
+        static_cast<double>(truncated) / static_cast<double>(checked) >
+            kMaxTruncatedRatio) {
+      return true;
+    }
+    if (checked >= kMaxBoundaryChecks) {
+      break;
+    }
+  }
+
+  if (checked == 0 || truncated == 0) {
+    return false;
+  }
+  if (standalone == 0) {
+    return true;
+  }
+
+  return static_cast<double>(truncated) / static_cast<double>(checked) >
+         kMaxTruncatedRatio;
+}
+
 // Returns seed sentencepieces for EM training.
 template <typename node_int_type>
 TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
@@ -326,7 +377,8 @@ TrainerModel::SentencePieces Trainer::MakeSeedSentencePiecesInternal() {
         continue;
       }
       // Skips if truncated at alphanum chars.
-      if (!trainer_spec_.split_alphanum() && is_alphanum_truncated(array, offset, len)) {
+      if (!trainer_spec_.split_alphanum() &&
+          should_skip_truncated_alphanum(array, SA, L[i], R[i], len)) {
         continue;
       }
       // character-wise coverage is the default score.

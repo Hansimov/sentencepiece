@@ -10,8 +10,10 @@ namespace str_utils {
 // Character classification functions
 bool is_digit(char32 c);
 bool is_alpha(char32 c);
+bool is_alnum(char32 c);
 bool is_mask(char32 c);
 bool is_dash(char32 c);
+bool is_connector(char32 c);
 
 // String analysis functions
 bool is_pure_digits(const string_util::UnicodeText &piece);

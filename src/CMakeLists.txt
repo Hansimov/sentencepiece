@@ -170,6 +170,7 @@ set(SPM_TEST_SRCS
   normalizer_test.cc
   sentencepiece_processor_test.cc
   sentencepiece_trainer_test.cc
+  str_utils_test.cc
   test_main.cc
   testharness.cc
   trainer_factory_test.cc

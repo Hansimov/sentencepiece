@@ -116,6 +116,31 @@ std::string ascii_lower(std::string piece_str) {
   return piece_str;
 }
 
+bool is_keyboard_mash_piece(const std::string &piece_str) {
+  static constexpr const char *kKeyboardRows[] = {
+      "1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm"};
+
+  if (piece_str.size() < 4) {
+    return false;
+  }
+  if (!std::all_of(piece_str.begin(), piece_str.end(), [](unsigned char c) {
+        return std::isalpha(c);
+      })) {
+    return false;
+  }
+
+  const std::string lower = ascii_lower(piece_str);
+  const std::string reversed(lower.rbegin(), lower.rend());
+  for (const char *row : kKeyboardRows) {
+    const std::string keyboard_row = row;
+    if (keyboard_row.find(lower) != std::string::npos ||
+        keyboard_row.find(reversed) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool is_video_id_piece(const std::string &piece_str) {
   const std::string lower = ascii_lower(piece_str);
   if (lower.size() >= 6 && lower.rfind("av", 0) == 0) {
@@ -228,6 +253,9 @@ bool is_malformed(const string_util::UnicodeText &piece) {
   }
 
   if (is_ascii_piece(piece)) {
+    if (is_keyboard_mash_piece(piece_str)) {
+      return true;
+    }
     if (has_repeated_ascii_run(piece_str)) {
       return true;
     }
